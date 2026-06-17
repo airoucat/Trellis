@@ -83,6 +83,14 @@ program
   .option("--droid", "Include Factory Droid commands")
   .option("--pi", "Include Pi Agent extension assets")
   .option("--reasonix", "Include Reasonix skills")
+  .option("--airoucat", "Apply the Airoucat workflow profile overlay")
+  .option(
+    "--profile <name>",
+    "Airoucat profile to apply with --airoucat (default, mod, automation)",
+  )
+  .option("--graphify", "Install graphify scripts and local Git hooks")
+  .option("--ambient", "Enable Airoucat Ambient Mode")
+  .option("--strict-evidence", "Require strict evidence rules in Airoucat mode")
   .option("-y, --yes", "Skip prompts and use defaults")
   .option(
     "-u, --user <name>",

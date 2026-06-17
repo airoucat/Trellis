@@ -7,6 +7,10 @@ import figlet from "figlet";
 import inquirer from "inquirer";
 import { createWorkflowStructure } from "../configurators/workflow.js";
 import {
+  configureAiroucat,
+  resolveAiroucatProfile,
+} from "../configurators/airoucat.js";
+import {
   getInitToolChoices,
   resolveCliFlag,
   configurePlatform,
@@ -972,6 +976,11 @@ interface InitOptions {
   droid?: boolean;
   pi?: boolean;
   reasonix?: boolean;
+  airoucat?: boolean;
+  profile?: string;
+  graphify?: boolean;
+  ambient?: boolean;
+  strictEvidence?: boolean;
   yes?: boolean;
   user?: string;
   force?: boolean;
@@ -1055,6 +1064,10 @@ export async function init(options: InitOptions): Promise<void> {
 
   const cwd = process.cwd();
   const isFirstInit = !fs.existsSync(path.join(cwd, DIR_NAMES.WORKFLOW));
+  const airoucatEnabled = options.airoucat === true;
+  const airoucatProfile = airoucatEnabled
+    ? resolveAiroucatProfile(options.profile)
+    : "default";
   // Captured here (before createWorkflowStructure + init_developer run) so
   // the three-branch dispatch at the bottom can tell "fresh clone joiner"
   // (.trellis/ exists, .developer missing) apart from "creator first init".
@@ -1886,6 +1899,17 @@ export async function init(options: InitOptions): Promise<void> {
 
     // Create root files (skip if exists)
     await createRootFiles(cwd);
+
+    if (airoucatEnabled) {
+      await configureAiroucat(cwd, {
+        profile: airoucatProfile,
+        ambient: options.ambient !== false,
+        graphify: options.graphify === true,
+        strictEvidence: options.strictEvidence === true,
+        codex: tools.includes("codex"),
+        claude: tools.includes("claude"),
+      });
+    }
   } finally {
     stopRecordingWrites();
   }

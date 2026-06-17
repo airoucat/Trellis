@@ -295,6 +295,223 @@ describe("init() integration", () => {
     );
   });
 
+  it("#3b-airoucat creates mod profile specs, evidence workflow, hostile review, and graphify assets", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify({ scripts: { test: "vitest run" } }, null, 2) + "\n",
+    );
+
+    await init({
+      yes: true,
+      airoucat: true,
+      profile: "mod",
+      ambient: true,
+      graphify: true,
+      strictEvidence: true,
+      codex: true,
+      claude: true,
+    } as Parameters<typeof init>[0]);
+
+    const workflow = fs.readFileSync(
+      path.join(tmpDir, PATHS.WORKFLOW_GUIDE_FILE),
+      "utf-8",
+    );
+    expect(workflow).toContain("[workflow-state:needs_evidence]");
+    expect(workflow).toContain("Ambient Intent Router");
+    expect(workflow).toContain("Hostile Review");
+
+    const config = fs.readFileSync(
+      path.join(tmpDir, DIR_NAMES.WORKFLOW, "config.yaml"),
+      "utf-8",
+    );
+    expect(config).toContain("airoucat:");
+    expect(config).toContain("profile: mod");
+    expect(config).toContain("strict: true");
+    expect(config).toContain("enabled: true");
+
+    const requiredFiles = [
+      ".trellis/spec/engineering/user-intent-routing.md",
+      ".trellis/spec/engineering/evidence-rules.md",
+      ".trellis/spec/engineering/hostile-review.md",
+      ".trellis/spec/engineering/no-fake-closeout.md",
+      ".trellis/spec/engineering/graphify-rules.md",
+      ".trellis/spec/engineering/testing-gates.md",
+      ".trellis/spec/engineering/review-checklist.md",
+      ".trellis/spec/project/non-goals.md",
+      ".trellis/spec/runtime/runtime-evidence.md",
+      ".trellis/spec/runtime/compatibility-boundaries.md",
+      ".trellis/spec/runtime/no-legacy-authority.md",
+      ".trellis/spec/runtime/integration-test-policy.md",
+      ".agents/skills/trellis-hostile-review/SKILL.md",
+      ".codex/skills/trellis-hostile-review/SKILL.md",
+      ".claude/skills/trellis-hostile-review/SKILL.md",
+      ".claude/commands/trellis/hostile-review.md",
+      ".codex/prompts/trellis-hostile-review.md",
+      "scripts/dev/setup_graphify_local.py",
+      ".githooks/graphify-common.sh",
+      ".githooks/post-commit",
+      ".githooks/post-checkout",
+      ".githooks/post-merge",
+      ".githooks/post-rewrite",
+    ];
+    for (const relativePath of requiredFiles) {
+      expect(fs.existsSync(path.join(tmpDir, relativePath))).toBe(true);
+    }
+
+    const hostileSkill = fs.readFileSync(
+      path.join(
+        tmpDir,
+        ".agents",
+        "skills",
+        "trellis-hostile-review",
+        "SKILL.md",
+      ),
+      "utf-8",
+    );
+    expect(hostileSkill).toContain("PASS_WITH_RISK");
+    expect(hostileSkill).toContain("Evidence Gaps");
+    expect(hostileSkill).toContain("Required Fixes Before Finish");
+
+    const gitignore = fs.readFileSync(path.join(tmpDir, ".gitignore"), "utf-8");
+    expect(gitignore).toContain("graphify-out/");
+
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(tmpDir, "package.json"), "utf-8"),
+    ) as { scripts?: Record<string, string> };
+    expect(packageJson.scripts?.["graphify:setup"]).toBe(
+      "python3 scripts/dev/setup_graphify_local.py",
+    );
+    expect(packageJson.scripts?.["graphify:rebuild"]).toBe(
+      "python3 scripts/dev/setup_graphify_local.py --rebuild",
+    );
+
+    const hashFile = JSON.parse(
+      fs.readFileSync(
+        path.join(tmpDir, DIR_NAMES.WORKFLOW, ".template-hashes.json"),
+        "utf-8",
+      ),
+    ) as { hashes?: Record<string, string> };
+    expect(
+      hashFile.hashes?.[".agents/skills/trellis-hostile-review/SKILL.md"],
+    ).toBeDefined();
+  });
+
+  it("#3b-airoucat rejects unsupported profiles", async () => {
+    await expect(
+      init({
+        yes: true,
+        airoucat: true,
+        profile: "unsupported",
+      } as Parameters<typeof init>[0]),
+    ).rejects.toThrow(/Unsupported Airoucat profile/);
+  });
+
+  it("#3b-airoucat default profile skips runtime-only specs and graphify assets", async () => {
+    await init({
+      yes: true,
+      airoucat: true,
+      codex: true,
+    } as Parameters<typeof init>[0]);
+
+    expect(
+      fs.existsSync(
+        path.join(
+          tmpDir,
+          ".trellis",
+          "spec",
+          "engineering",
+          "user-intent-routing.md",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".trellis", "spec", "runtime", "runtime-evidence.md"),
+      ),
+    ).toBe(false);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, "scripts", "dev", "setup_graphify_local.py"),
+      ),
+    ).toBe(false);
+
+    const config = fs.readFileSync(
+      path.join(tmpDir, DIR_NAMES.WORKFLOW, "config.yaml"),
+      "utf-8",
+    );
+    expect(config).toContain("profile: default");
+    expect(config).toContain("enabled: false");
+  });
+
+  it("#3b-airoucat claude-only profile installs hostile review without codex prompt", async () => {
+    await init({
+      yes: true,
+      airoucat: true,
+      profile: "automation",
+      claude: true,
+    } as Parameters<typeof init>[0]);
+
+    expect(
+      fs.existsSync(
+        path.join(
+          tmpDir,
+          ".claude",
+          "skills",
+          "trellis-hostile-review",
+          "SKILL.md",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(
+          tmpDir,
+          ".claude",
+          "commands",
+          "trellis",
+          "hostile-review.md",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".codex", "prompts", "trellis-hostile-review.md"),
+      ),
+    ).toBe(false);
+  });
+
+  it("#3b-airoucat graphify preserves existing package scripts", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify(
+        {
+          scripts: {
+            build: "tsc",
+            "graphify:setup": "custom setup",
+          },
+        },
+        null,
+        2,
+      ) + "\n",
+    );
+
+    await init({
+      yes: true,
+      airoucat: true,
+      graphify: true,
+      claude: true,
+    } as Parameters<typeof init>[0]);
+
+    const packageJson = JSON.parse(
+      fs.readFileSync(path.join(tmpDir, "package.json"), "utf-8"),
+    ) as { scripts?: Record<string, string> };
+    expect(packageJson.scripts?.build).toBe("tsc");
+    expect(packageJson.scripts?.["graphify:setup"]).toBe("custom setup");
+    expect(packageJson.scripts?.["graphify:rebuild"]).toBe(
+      "python3 scripts/dev/setup_graphify_local.py --rebuild",
+    );
+  });
+
   it("#3c kiro platform creates .kiro/skills", async () => {
     await init({ yes: true, kiro: true });
 
