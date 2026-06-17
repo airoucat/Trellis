@@ -68,12 +68,20 @@ trellis init --cursor --opencode --codex -u your-name
 
 ## 如何使用
 
-使用流程非常简单：
+Airoucat Trellis 需要先用 fork 配置初始化：
 
-1. **用自然语言描述你的需求。**
-2. **与 AI 一起头脑风暴**，一次只回答一个问题，直到 PRD 足够清晰，然后开始实现。
-3. **交由 AI 自主推进** —— AI 会调用 `trellis-implement` 编写代码，并自动依据 Spec、lint、type-check 与测试进行校验。
-4. **当工作完成或会话上下文接近上限时，输入 `/trellis:finish-work`**。Trellis 会归档任务并更新工作日志。
+```bash
+trellis init -u your-name --airoucat --profile mod --codex --claude --graphify --strict-evidence
+```
+
+初始化后，用自然语言触发日常流程，不需要手动记所有子命令：
+
+1. **“先看看” / “take a look”**：只读查看。AI 应先看代码、规格和 graphify 输出，写清下一步计划，不改文件。
+2. **“可以做了” / “go with that”**：当 `.trellis/scope/implement.md` 已经清楚时开始实现。AI 按计划改代码，按风险补测试，并控制修改范围。
+3. **“稳不稳” / “hostile review” / “find holes”**：走严格审查和检查流程。发布前、方案不确定时用这个。
+4. **“收了吧” / “can this close”**：进入收尾检查。先补 `evidence.md`、验证命令、当前 profile 的运行证据；需要时重建 graphify，然后再 finish 或归档任务。
+
+`graphify` 只是代码地图，方便查找关系；不能替代源码、测试、日志和运行证据。
 
 ## 工作原理
 

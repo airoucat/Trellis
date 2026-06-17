@@ -68,12 +68,20 @@ See the [Quick Start](https://docs.trytrellis.app/start/install-and-first-task) 
 
 ## How to Use
 
-The workflow is simple:
+Airoucat Trellis is meant to be initialized with the fork profile before normal work:
 
-1. **Describe what you want** in natural language.
-2. **Brainstorm** with the AI one question at a time until the PRD is clear, then implementation begins.
-3. **Let it run** — the AI calls Trellis Implement and auto-checks the result against specs, lint, type-check, and tests.
-4. **Type `/trellis:finish-work`** when the work is done or the session context fills up. Trellis archives the task and updates journals.
+```bash
+trellis init -u your-name --airoucat --profile mod --codex --claude --graphify --strict-evidence
+```
+
+After initialization, use the router phrases instead of driving every subcommand manually:
+
+1. **"Take a look" / "先看看"** keeps the agent in read-only planning. It should inspect code, specs, and graphify output, then write the next plan without editing files.
+2. **"Go with that" / "可以做了"** starts implementation once `.trellis/scope/implement.md` is clear. The agent should follow the repo plan, write tests where risk calls for them, and keep changes scoped.
+3. **"Find holes" / "稳不稳" / "hostile review"** runs the strict review and check path. Use it before release or when a plan feels uncertain.
+4. **"Can this close?" / "收了吧"** starts the finish gate: update `evidence.md`, record validation commands and runtime evidence for the active profile, rebuild graphify when relevant, then finish or archive the task.
+
+Graphify is a code map. Use it to navigate faster, but do not treat it as a replacement for source code, tests, logs, or runtime evidence.
 
 ## How It Works
 
