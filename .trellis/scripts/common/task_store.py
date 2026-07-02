@@ -115,7 +115,7 @@ def _repo_relative_path(path: Path, repo_root: Path) -> str:
 # Keep in sync with src/types/ai-tools.ts AI_TOOLS entries — these are the
 # platforms listed in workflow.md's "agent-capable" Skill Routing block
 # (Class-1 hook-inject + Class-2 pull-based preludes). Kilo / Antigravity /
-# Windsurf are NOT in this list: they do not consume JSONL.
+# Devin are NOT in this list: they do not consume JSONL.
 _SUBAGENT_CONFIG_DIRS: tuple[str, ...] = (
     ".claude",
     ".cursor",
@@ -239,6 +239,34 @@ def cmd_create(args: argparse.Namespace) -> int:
     # Create task directory with MM-DD-slug format
     tasks_dir = get_tasks_dir(repo_root)
     date_prefix = generate_task_date_prefix()
+
+    # Guard against date-prefixed --slug (e.g. a full task dir name pasted in),
+    # which would otherwise produce MM-DD-MM-DD-slug (issue #377). Only an
+    # explicit --slug is guarded; title-derived slugs are left untouched.
+    if args.slug:
+        m = re.match(r"^(\d{2})-(\d{2})-(.+)$", slug)
+        if m and 1 <= int(m.group(1)) <= 12 and 1 <= int(m.group(2)) <= 31:
+            slug_prefix = f"{m.group(1)}-{m.group(2)}"
+            if slug_prefix == date_prefix:
+                slug = m.group(3)
+                print(
+                    colored(
+                        f'warning: --slug should not include the MM-DD prefix; normalized to "{slug}"',
+                        Colors.YELLOW,
+                    ),
+                    file=sys.stderr,
+                )
+            else:
+                print(
+                    colored(
+                        f"Error: --slug starts with a date prefix ({slug_prefix}-), but task.py create always uses today's date ({date_prefix}).",
+                        Colors.RED,
+                    ),
+                    file=sys.stderr,
+                )
+                print(f"Pass only the slug body, e.g. --slug {m.group(3)}", file=sys.stderr)
+                return 1
+
     dir_name = f"{date_prefix}-{slug}"
     task_dir = tasks_dir / dir_name
     task_json_path = task_dir / FILE_TASK_JSON
@@ -299,7 +327,7 @@ def cmd_create(args: argparse.Namespace) -> int:
 
     # Seed implement.jsonl / check.jsonl for sub-agent-capable platforms.
     # Agent curates real entries during planning when the task needs them.
-    # Agent-less platforms (Kilo / Antigravity / Windsurf) skip this — they
+    # Agent-less platforms (Kilo / Antigravity / Devin) skip this — they
     # load specs via the trellis-before-dev skill instead of JSONL.
     seeded_jsonl = False
     if _has_subagent_platform(repo_root):
