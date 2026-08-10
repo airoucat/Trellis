@@ -92,6 +92,14 @@ program
   .option("--grok", "Include Grok Build skills and agents")
   .option("--kimi", "Include Kimi Code skills")
   .option("--snow", "Include Snow CLI skills and commands")
+  .option("--airoucat", "Apply the Airoucat workflow profile overlay")
+  .option(
+    "--profile <name>",
+    "Airoucat profile to apply with --airoucat (default, mod, automation)",
+  )
+  .option("--graphify", "Install graphify scripts and local Git hooks")
+  .option("--ambient", "Enable Airoucat Ambient Mode")
+  .option("--strict-evidence", "Require strict evidence rules in Airoucat mode")
   .option(
     "--with-statusline",
     "Install the Trellis statusLine for Claude Code (off by default)",
