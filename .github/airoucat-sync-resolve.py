@@ -130,4 +130,28 @@ replace_exact(
     '  .option(\n    "--with-statusline",\n',
 )
 
-a iroucat_readme = None
+airoucat_readme = '''### Airoucat fork profile
+
+This fork keeps Airoucat behavior as an optional overlay on top of upstream Trellis.
+For the strict mod-development profile used by this fork:
+
+```bash
+trellis init -u your-name --airoucat --profile mod --codex --claude --graphify --strict-evidence
+```
+
+The overlay adds evidence rules, hostile-review guidance, optional Graphify hooks,
+and Airoucat-specific specs without replacing the upstream task lifecycle. It can
+also be applied later to an already initialized Trellis project with
+`trellis init --airoucat ...`.
+
+See `docs/airoucat/` for the fork-specific workflow and smoke-test notes.
+
+'''
+
+replace_exact(
+    readme_path,
+    'See the [Quick Start](https://docs.trytrellis.app/start/install-and-first-task) and [Supported Platforms](https://docs.trytrellis.app/advanced/multi-platform) guides for setup details.\n\n## How to Use\n',
+    'See the [Quick Start](https://docs.trytrellis.app/start/install-and-first-task) and [Supported Platforms](https://docs.trytrellis.app/advanced/multi-platform) guides for setup details.\n\n'
+    + airoucat_readme
+    + '## How to Use\n',
+)
