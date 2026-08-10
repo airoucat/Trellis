@@ -796,10 +796,11 @@ async function handleReinit(
 
   let doAddPlatforms = explicitTools.length > 0;
   let doAddDeveloper = !!options.user;
+  const doAiroucat = options.airoucat === true;
   let platformsToAdd: string[] = explicitTools;
 
-  // No explicit flags → show menu
-  if (!doAddPlatforms && !doAddDeveloper) {
+  // No explicit action → show menu. Airoucat is itself a re-init action.
+  if (!doAddPlatforms && !doAddDeveloper && !doAiroucat) {
     if (options.yes) {
       console.log(chalk.gray(`Already initialized with: ${configuredNames}`));
       console.log(
@@ -976,6 +977,24 @@ async function handleReinit(
     }
   }
 
+  if (doAiroucat) {
+    const configuredPlatformsAfter = getConfiguredPlatforms(cwd);
+    const airoucatWritten = startRecordingWrites(cwd);
+    try {
+      await configureAiroucat(cwd, {
+        profile: resolveAiroucatProfile(options.profile),
+        ambient: options.ambient !== false,
+        graphify: options.graphify === true,
+        strictEvidence: options.strictEvidence === true,
+        codex: configuredPlatformsAfter.has("codex"),
+        claude: configuredPlatformsAfter.has("claude-code"),
+      });
+    } finally {
+      stopRecordingWrites();
+    }
+    initializeHashes(cwd, { trackedPaths: airoucatWritten, merge: true });
+  }
+
   return true;
 }
 
@@ -1025,6 +1044,10 @@ interface InitOptions {
   reasonix?: boolean;
   zcode?: boolean;
   trae?: boolean;
+  omp?: boolean;
+  grok?: boolean;
+  kimi?: boolean;
+  snow?: boolean;
   airoucat?: boolean;
   profile?: string;
   graphify?: boolean;

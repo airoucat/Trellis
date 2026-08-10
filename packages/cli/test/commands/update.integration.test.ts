@@ -51,12 +51,30 @@ vi.mock("giget", async () => {
 // === Imports ===
 
 import { init } from "../../src/commands/init.js";
-import { update } from "../../src/commands/update.js";
+import {
+  update,
+  classifyMigrations,
+  executeMigrations,
+} from "../../src/commands/update.js";
 import { VERSION } from "../../src/constants/version.js";
 import { DIR_NAMES, FILE_NAMES, PATHS } from "../../src/constants/paths.js";
 import { computeHash } from "../../src/utils/template-hash.js";
 import { workflowMdTemplate } from "../../src/templates/trellis/index.js";
-import { replacePythonCommandLiterals } from "../../src/configurators/shared.js";
+import {
+  COPILOT_INSTRUCTIONS_BLOCK_END,
+  COPILOT_INSTRUCTIONS_BLOCK_START,
+  COPILOT_INSTRUCTIONS_PATH,
+  getCopilotInstructions,
+} from "../../src/templates/copilot/index.js";
+import {
+  replacePythonCommandLiterals,
+  resolveSkills,
+  resolveSkillsNeutral,
+  resolveAllAsSkillsNeutral,
+  resolveBundledSkills,
+  collectSkillTemplates,
+} from "../../src/configurators/shared.js";
+import { AI_TOOLS } from "../../src/types/ai-tools.js";
 
 // A managed template file that update always handles (Python script)
 const MANAGED_FILE = `${PATHS.SCRIPTS}/get_context.py`;
@@ -240,15 +258,36 @@ describe("update() integration", () => {
     expect(entries.filter((e) => e.startsWith(".backup-")).length).toBe(0);
   });
 
-  it("[issue-zcode-codex-upgrade] zcode .agents skills do not trigger legacy Codex backfill", async () => {
+  it("#1b current OpenCode templates are not classified as deprecated", async () => {
+    const startPath = ".opencode/commands/trellis/start.md";
+    await init({ yes: true, force: true, opencode: true });
+    expect(fs.existsSync(projectFile(startPath))).toBe(true);
+
+    await update({ dryRun: true });
+
+    const output = vi.mocked(console.log).mock.calls.flat().join("\n");
+    expect(output).not.toContain(`${startPath} (modified, skipped)`);
+  });
+
+  it("[issue-zcode-codex-upgrade] zcode private skills do not trigger legacy Codex backfill", async () => {
     await init({ yes: true, force: true, zcode: true });
 
+    expect(fs.existsSync(projectFile(".zcode/commands/trellis/start.md"))).toBe(
+      false,
+    );
     expect(
-      fs.existsSync(projectFile(".zcode/commands/trellis/start.md")),
+      fs.existsSync(projectFile(".zcode/skills/trellis-start/SKILL.md")),
+    ).toBe(false);
+    expect(
+      fs.existsSync(projectFile(".zcode/skills/trellis-check/SKILL.md")),
+    ).toBe(true);
+    expect(
+      fs.existsSync(projectFile(".zcode/agents/trellis-research.md")),
     ).toBe(true);
     expect(
       fs.existsSync(projectFile(".agents/skills/trellis-start/SKILL.md")),
     ).toBe(false);
+    expect(fs.existsSync(projectFile(".agents/skills"))).toBe(false);
     expect(
       fs.existsSync(projectFile(".agents/skills/trellis-continue/SKILL.md")),
     ).toBe(false);
@@ -258,6 +297,115 @@ describe("update() integration", () => {
     const logOutput = vi.mocked(console.log).mock.calls.flat().join("\n");
     expect(logOutput).not.toContain("Legacy Codex detected");
     expect(fs.existsSync(projectFile(".codex"))).toBe(false);
+    expect(
+      fs.existsSync(projectFile(".zcode/skills/trellis-start/SKILL.md")),
+    ).toBe(false);
+    expect(
+      fs.existsSync(projectFile(".zcode/skills/trellis-check/SKILL.md")),
+    ).toBe(true);
+    expect(
+      fs.existsSync(projectFile(".zcode/agents/trellis-research.md")),
+    ).toBe(true);
+    expect(fs.existsSync(projectFile(".agents/skills"))).toBe(false);
+  });
+
+  it("[issue-447] 0.6.8 rename-dir migration moves legacy .pi/skills/ into shared .agents/skills/ even when Codex already installed the shared root", async () => {
+    // Simulate a pre-0.6.8 project: Pi + Codex both installed. Pre-fix Pi
+    // wrote its own Pi-flavored copy under `.pi/skills/` (via resolveSkills,
+    // not resolveSkillsNeutral), while Codex already wrote the shared,
+    // neutral `.agents/skills/` root. Reproduces the #447 repro shape.
+    //
+    // This exercises classifyMigrations()/executeMigrations() directly
+    // (like the existing "rename-dir ownership gate" tests in
+    // update-internals.test.ts) rather than the full update() CLI flow,
+    // because the 0.6.8 manifest only becomes "pending" once the CLI's own
+    // package.json version reaches 0.6.8 — a release-time bump orthogonal to
+    // this bug fix.
+    await init({ yes: true, force: true, pi: true, codex: true });
+
+    // `.agents/skills/` now holds the correct, neutral, current-version
+    // content (written by both Codex and current Pi in current code).
+    const neutralContent = readProjectFile(
+      ".agents/skills/trellis-update-spec/SKILL.md",
+    );
+
+    // Fabricate the pre-fix `.pi/skills/` leftover with Pi-flavored bytes
+    // (old pi.ts used resolveSkills(ctx), not resolveSkillsNeutral(ctx)).
+    const piCtx = AI_TOOLS.pi.templateContext;
+    const legacyPiSkillFiles = collectSkillTemplates(
+      ".pi/skills",
+      resolveSkills(piCtx),
+      resolveBundledSkills(piCtx),
+    );
+
+    const legacyContent = legacyPiSkillFiles.get(
+      ".pi/skills/trellis-update-spec/SKILL.md",
+    );
+    expect(legacyContent).toBeDefined();
+    // Sanity: the Pi-flavored bytes actually differ from the shared neutral
+    // bytes already on disk (otherwise this test wouldn't be exercising the
+    // reported bug at all).
+    expect(legacyContent).not.toBe(neutralContent);
+
+    const hashes = readHashesV2(hashFilePath());
+    for (const [relativePath, content] of legacyPiSkillFiles) {
+      writeProjectFile(relativePath, content);
+      hashes[relativePath] = computeHash(content);
+    }
+    writeHashesV2(hashFilePath(), hashes);
+
+    expect(fs.existsSync(projectFile(".pi/skills/trellis-update-spec"))).toBe(
+      true,
+    );
+    expect(
+      fs.existsSync(projectFile(".agents/skills/trellis-update-spec")),
+    ).toBe(true);
+
+    // Build the current-version templates map for `.agents/skills/` the way
+    // both real writers (Codex, Pi) produce it — mirrors what update()'s
+    // collectTemplateFiles() would assemble for this project.
+    const codexCtx = AI_TOOLS.codex.templateContext;
+    const currentTemplates = new Map<string, string>([
+      ...collectSkillTemplates(
+        ".agents/skills",
+        resolveAllAsSkillsNeutral(codexCtx),
+        resolveBundledSkills(codexCtx),
+      ),
+      ...collectSkillTemplates(
+        ".agents/skills",
+        resolveSkillsNeutral(piCtx),
+        resolveBundledSkills(piCtx),
+      ),
+    ]);
+
+    const migrationItem = {
+      type: "rename-dir" as const,
+      from: ".pi/skills",
+      to: ".agents/skills",
+    };
+    const finalHashes = readHashesV2(hashFilePath());
+    const classified = classifyMigrations(
+      [migrationItem],
+      tmpDir,
+      finalHashes,
+      currentTemplates,
+    );
+
+    // The merged 0.6.8 migration must resolve this automatically — not
+    // punt to the user as an unresolved conflict.
+    expect(classified.conflict).toHaveLength(0);
+    expect(classified.auto).toHaveLength(1);
+
+    await executeMigrations(classified, tmpDir, { force: true, skipAll: false }, currentTemplates);
+
+    // No duplicate/leftover `.pi/skills/` directory should survive.
+    expect(fs.existsSync(projectFile(".pi/skills"))).toBe(false);
+
+    // `.agents/skills/` must end up with the correct, current, neutral
+    // content — not the stale Pi-flavored bytes from the deleted legacy dir.
+    expect(
+      readProjectFile(".agents/skills/trellis-update-spec/SKILL.md"),
+    ).toBe(neutralContent);
   });
 
   it("#2 dry run makes no file changes even when changes exist", async () => {
@@ -413,6 +561,66 @@ describe("update() integration", () => {
     );
     // Tail equals the canonical template (force-applied managed block).
     expect(result.endsWith(templateContent.trimEnd() + "\n")).toBe(true);
+  });
+
+  it("#4e appends Trellis Copilot guidance to existing repo instructions", async () => {
+    await init({ yes: true, force: true, copilot: true });
+
+    const userContent =
+      "# Repo Copilot Instructions\n\nReview app code first.\n";
+    writeProjectFile(COPILOT_INSTRUCTIONS_PATH, userContent);
+
+    const hashFile = hashFilePath();
+    const hashes = removeHashEntry(
+      readHashesV2(hashFile),
+      COPILOT_INSTRUCTIONS_PATH,
+    ) as Record<string, string>;
+    writeHashesV2(hashFile, hashes);
+
+    await update({});
+
+    const result = readProjectFile(COPILOT_INSTRUCTIONS_PATH);
+    expect(result).toContain("# Repo Copilot Instructions");
+    expect(result).toContain("Review app code first.");
+    expect(result).toContain(COPILOT_INSTRUCTIONS_BLOCK_START);
+    expect(result).toContain(COPILOT_INSTRUCTIONS_BLOCK_END);
+    expect(result).toContain("Trellis-generated runtime");
+    expect(result.indexOf("# Repo Copilot Instructions")).toBeLessThan(
+      result.indexOf(COPILOT_INSTRUCTIONS_BLOCK_START),
+    );
+    expect(readHashesV2(hashFile)[COPILOT_INSTRUCTIONS_PATH]).toBe(
+      computeHash(result),
+    );
+  });
+
+  it("#4f refreshes only the Trellis Copilot guidance block", async () => {
+    await init({ yes: true, force: true, copilot: true });
+
+    const oldBlock = getCopilotInstructions().replace(
+      "Group duplicate root-cause findings into one comment",
+      "Leave duplicate comments for every occurrence",
+    );
+    const existingContent = `# Repo Copilot Instructions\n\n${oldBlock}\n\n## Local Notes\n\nKeep this.\n`;
+    writeProjectFile(COPILOT_INSTRUCTIONS_PATH, existingContent);
+
+    const hashFile = hashFilePath();
+    const hashes = readHashesV2(hashFile);
+    hashes[COPILOT_INSTRUCTIONS_PATH] = computeHash(existingContent);
+    writeHashesV2(hashFile, hashes);
+
+    await update({});
+
+    const result = readProjectFile(COPILOT_INSTRUCTIONS_PATH);
+    expect(result).toContain("# Repo Copilot Instructions");
+    expect(result).toContain("## Local Notes");
+    expect(result).toContain("Keep this.");
+    expect(result).toContain(
+      "Group duplicate root-cause findings into one comment",
+    );
+    expect(result).not.toContain("Leave duplicate comments");
+    expect(readHashesV2(hashFile)[COPILOT_INSTRUCTIONS_PATH]).toBe(
+      computeHash(result),
+    );
   });
 
   it("#5 force overwrites user-modified files", async () => {
@@ -608,9 +816,7 @@ describe("update() integration", () => {
     expect(readProjectFile(PATHS.WORKFLOW_GUIDE_FILE)).toContain(
       "[codex-inline, Kilo, Antigravity, Devin]",
     );
-    expect(readProjectFile(PATHS.WORKFLOW_GUIDE_FILE)).not.toContain(
-      "[Codex]",
-    );
+    expect(readProjectFile(PATHS.WORKFLOW_GUIDE_FILE)).not.toContain("[Codex]");
 
     // Version-specific additive config sections still apply to a user-modified
     // config.yaml, while preserving the local content around the append.
@@ -623,9 +829,7 @@ describe("update() integration", () => {
 
     // User-modified template files are skipped under skipAll and their hashes
     // are not rewritten to bless the local modification as a template.
-    expect(readProjectFile(userModifiedScript)).toBe(
-      userModifiedScriptContent,
-    );
+    expect(readProjectFile(userModifiedScript)).toBe(userModifiedScriptContent);
     const hashes = readHashesV2(hashFilePath());
     expect(hashes[PATHS.WORKFLOW_GUIDE_FILE]).toBe(
       computeHash(expectedWorkflow),
@@ -814,6 +1018,31 @@ describe("update() integration", () => {
 
     // File SHOULD be created (no hash = truly new)
     expect(fs.existsSync(targetPath)).toBe(true);
+  });
+
+  it("#15a backfills .gitattributes journal merge=union rule when missing (#415)", async () => {
+    await setupProject();
+
+    const gitattributesPath = path.join(tmpDir, ".gitattributes");
+    fs.rmSync(gitattributesPath, { force: true });
+
+    await update({ force: true });
+
+    const content = fs.readFileSync(gitattributesPath, "utf-8");
+    expect(content).toContain(".trellis/workspace/*/journal-*.md merge=union");
+  });
+
+  it("#15b does not duplicate an existing user journal merge=union rule (#415)", async () => {
+    await setupProject();
+
+    const gitattributesPath = path.join(tmpDir, ".gitattributes");
+    const userContent =
+      "# my own rules\n*.png binary\n.trellis/workspace/*/journal-*.md merge=union\n";
+    fs.writeFileSync(gitattributesPath, userContent);
+
+    await update({ force: true });
+
+    expect(fs.readFileSync(gitattributesPath, "utf-8")).toBe(userContent);
   });
 
   it("#16 config.yaml update.skip prevents file from being updated", async () => {
@@ -1273,10 +1502,10 @@ describe("update() integration", () => {
     const updated = fs.readFileSync(workflowPath, "utf-8");
     expect(updated).toBe(replacePythonCommandLiterals(workflowMdTemplate));
     expect(updated).toContain(
-      "[codex-sub-agent, Gemini, Qoder, Copilot, ZCode, Reasonix, Trae]",
+      "[Gemini, Qoder, Copilot, Reasonix, Trae, Grok, Kimi Code]",
     );
     expect(updated).toContain(
-      "[/Claude Code, Cursor, OpenCode, CodeBuddy, Droid, Pi]",
+      "[/Claude Code, Cursor, OpenCode, codex-sub-agent, CodeBuddy, Droid, Pi, ZCode, Snow, Oh My Pi]",
     );
     expect(updated).toContain("[codex-inline, Kilo, Antigravity, Devin]");
     expect(updated).not.toContain("[Codex]");

@@ -44,7 +44,7 @@
 | **任务驱动工作流** | PRD、实现上下文、审查上下文与任务状态统一存放于 `.trellis/tasks/`，AI 开发过程保持结构化、可追溯。 |
 | **项目记忆** | `.trellis/workspace/` 中的工作日志（journal）会保留上一次会话的脉络，因此每次新会话都能基于真实上下文开始。 |
 | **团队共享标准** | Spec 随仓库一同版本化，个人总结出的规则与流程可以直接成为整个团队的基础设施。 |
-| **多平台复用** | 同一套 Trellis 结构覆盖 16 个 AI coding 平台，无需为每个工具单独搭建工作流。 |
+| **多平台复用** | 同一套 Trellis 结构覆盖 21 个 AI coding 平台，无需为每个工具单独搭建工作流。 |
 
 ## 前置要求
 
@@ -68,20 +68,12 @@ trellis init --cursor --opencode --codex -u your-name
 
 ## 如何使用
 
-Airoucat Trellis 需要先用 fork 配置初始化：
+使用流程非常简单：
 
-```bash
-trellis init -u your-name --airoucat --profile mod --codex --claude --graphify --strict-evidence
-```
-
-初始化后，用自然语言触发日常流程，不需要手动记所有子命令：
-
-1. **“先看看” / “take a look”**：只读查看。AI 应先看代码、规格和 graphify 输出，写清下一步计划，不改文件。
-2. **“可以做了” / “go with that”**：当 `.trellis/scope/implement.md` 已经清楚时开始实现。AI 按计划改代码，按风险补测试，并控制修改范围。
-3. **“稳不稳” / “hostile review” / “find holes”**：走严格审查和检查流程。发布前、方案不确定时用这个。
-4. **“收了吧” / “can this close”**：进入收尾检查。先补 `evidence.md`、验证命令、当前 profile 的运行证据；需要时重建 graphify，然后再 finish 或归档任务。
-
-`graphify` 只是代码地图，方便查找关系；不能替代源码、测试、日志和运行证据。
+1. **用自然语言描述你的需求。**
+2. **与 AI 一起头脑风暴**，一次只回答一个问题，直到 PRD 足够清晰，然后开始实现。
+3. **交由 AI 自主推进** —— AI 会调用 `trellis-implement` 编写代码，并自动依据 Spec、lint、type-check 与测试进行校验。
+4. **当工作完成或会话上下文接近上限时，输入 `/trellis:finish-work`**。Trellis 会归档任务并更新工作日志。
 
 ## 工作原理
 
@@ -153,7 +145,7 @@ Trellis 内部运行一个 4 阶段循环，skill 与子代理均由系统自动
 ### 联系我们
 
 <p align="center">
-<img src="assets/wx_link9.jpg" alt="微信群" width="260" />
+<img src="assets/wx_link11.jpg" alt="微信群" width="260" />
 &nbsp;&nbsp;&nbsp;&nbsp;
 <img src="assets/feishu-group-qr.jpg" alt="飞书话题群" width="260" />
 </p>

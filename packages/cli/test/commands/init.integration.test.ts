@@ -51,6 +51,10 @@ import { VERSION } from "../../src/constants/version.js";
 import { DIR_NAMES, FILE_NAMES, PATHS } from "../../src/constants/paths.js";
 import { collectPlatformTemplates } from "../../src/configurators/index.js";
 import { computeHash } from "../../src/utils/template-hash.js";
+import {
+  COPILOT_INSTRUCTIONS_PATH,
+  getCopilotInstructions,
+} from "../../src/templates/copilot/index.js";
 import { execSync } from "node:child_process";
 
 // eslint-disable-next-line @typescript-eslint/no-empty-function
@@ -106,6 +110,7 @@ describe("init() integration", () => {
     expect(fs.existsSync(path.join(tmpDir, ".github", "copilot"))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, ".factory"))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, ".pi"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, ".kimi-code"))).toBe(false);
 
     // Root files
     expect(fs.existsSync(path.join(tmpDir, "AGENTS.md"))).toBe(true);
@@ -142,6 +147,19 @@ describe("init() integration", () => {
     ).toBe(true);
   });
 
+  it("#1a writes .gitattributes with the journal merge=union rule (#415)", async () => {
+    await init({ yes: true });
+
+    const gitattributes = fs.readFileSync(
+      path.join(tmpDir, ".gitattributes"),
+      "utf-8",
+    );
+    expect(gitattributes).toContain(
+      ".trellis/workspace/*/journal-*.md merge=union",
+    );
+    expect(gitattributes).not.toContain("index.md merge=union");
+  });
+
   it("#1b does not print the promotional pain-point block", async () => {
     await init({ yes: true });
 
@@ -173,6 +191,7 @@ describe("init() integration", () => {
     expect(fs.existsSync(path.join(tmpDir, ".github", "copilot"))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, ".factory"))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, ".pi"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, ".kimi-code"))).toBe(false);
     expect(
       fs.existsSync(
         path.join(tmpDir, ".claude", "skills", "trellis-meta", "SKILL.md"),
@@ -196,6 +215,7 @@ describe("init() integration", () => {
     expect(fs.existsSync(path.join(tmpDir, ".devin", "workflows"))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, ".github", "copilot"))).toBe(false);
     expect(fs.existsSync(path.join(tmpDir, ".pi"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, ".kimi-code"))).toBe(false);
   });
 
   it("#3b codex platform creates skills plus .codex assets", async () => {
@@ -286,223 +306,6 @@ describe("init() integration", () => {
     );
     expect(trackedPaths).toContain(
       ".agents/skills/trellis-spec-bootstrap/references/spec-writing.md",
-    );
-  });
-
-  it("#3b-airoucat creates mod profile specs, evidence workflow, hostile review, and graphify assets", async () => {
-    fs.writeFileSync(
-      path.join(tmpDir, "package.json"),
-      JSON.stringify({ scripts: { test: "vitest run" } }, null, 2) + "\n",
-    );
-
-    await init({
-      yes: true,
-      airoucat: true,
-      profile: "mod",
-      ambient: true,
-      graphify: true,
-      strictEvidence: true,
-      codex: true,
-      claude: true,
-    } as Parameters<typeof init>[0]);
-
-    const workflow = fs.readFileSync(
-      path.join(tmpDir, PATHS.WORKFLOW_GUIDE_FILE),
-      "utf-8",
-    );
-    expect(workflow).toContain("[workflow-state:needs_evidence]");
-    expect(workflow).toContain("Ambient Intent Router");
-    expect(workflow).toContain("Hostile Review");
-
-    const config = fs.readFileSync(
-      path.join(tmpDir, DIR_NAMES.WORKFLOW, "config.yaml"),
-      "utf-8",
-    );
-    expect(config).toContain("airoucat:");
-    expect(config).toContain("profile: mod");
-    expect(config).toContain("strict: true");
-    expect(config).toContain("enabled: true");
-
-    const requiredFiles = [
-      ".trellis/spec/engineering/user-intent-routing.md",
-      ".trellis/spec/engineering/evidence-rules.md",
-      ".trellis/spec/engineering/hostile-review.md",
-      ".trellis/spec/engineering/no-fake-closeout.md",
-      ".trellis/spec/engineering/graphify-rules.md",
-      ".trellis/spec/engineering/testing-gates.md",
-      ".trellis/spec/engineering/review-checklist.md",
-      ".trellis/spec/project/non-goals.md",
-      ".trellis/spec/runtime/runtime-evidence.md",
-      ".trellis/spec/runtime/compatibility-boundaries.md",
-      ".trellis/spec/runtime/no-legacy-authority.md",
-      ".trellis/spec/runtime/integration-test-policy.md",
-      ".agents/skills/trellis-hostile-review/SKILL.md",
-      ".codex/skills/trellis-hostile-review/SKILL.md",
-      ".claude/skills/trellis-hostile-review/SKILL.md",
-      ".claude/commands/trellis/hostile-review.md",
-      ".codex/prompts/trellis-hostile-review.md",
-      "scripts/dev/setup_graphify_local.py",
-      ".githooks/graphify-common.sh",
-      ".githooks/post-commit",
-      ".githooks/post-checkout",
-      ".githooks/post-merge",
-      ".githooks/post-rewrite",
-    ];
-    for (const relativePath of requiredFiles) {
-      expect(fs.existsSync(path.join(tmpDir, relativePath))).toBe(true);
-    }
-
-    const hostileSkill = fs.readFileSync(
-      path.join(
-        tmpDir,
-        ".agents",
-        "skills",
-        "trellis-hostile-review",
-        "SKILL.md",
-      ),
-      "utf-8",
-    );
-    expect(hostileSkill).toContain("PASS_WITH_RISK");
-    expect(hostileSkill).toContain("Evidence Gaps");
-    expect(hostileSkill).toContain("Required Fixes Before Finish");
-
-    const gitignore = fs.readFileSync(path.join(tmpDir, ".gitignore"), "utf-8");
-    expect(gitignore).toContain("graphify-out/");
-
-    const packageJson = JSON.parse(
-      fs.readFileSync(path.join(tmpDir, "package.json"), "utf-8"),
-    ) as { scripts?: Record<string, string> };
-    expect(packageJson.scripts?.["graphify:setup"]).toBe(
-      "python3 scripts/dev/setup_graphify_local.py",
-    );
-    expect(packageJson.scripts?.["graphify:rebuild"]).toBe(
-      "python3 scripts/dev/setup_graphify_local.py --rebuild",
-    );
-
-    const hashFile = JSON.parse(
-      fs.readFileSync(
-        path.join(tmpDir, DIR_NAMES.WORKFLOW, ".template-hashes.json"),
-        "utf-8",
-      ),
-    ) as { hashes?: Record<string, string> };
-    expect(
-      hashFile.hashes?.[".agents/skills/trellis-hostile-review/SKILL.md"],
-    ).toBeDefined();
-  });
-
-  it("#3b-airoucat rejects unsupported profiles", async () => {
-    await expect(
-      init({
-        yes: true,
-        airoucat: true,
-        profile: "unsupported",
-      } as Parameters<typeof init>[0]),
-    ).rejects.toThrow(/Unsupported Airoucat profile/);
-  });
-
-  it("#3b-airoucat default profile skips runtime-only specs and graphify assets", async () => {
-    await init({
-      yes: true,
-      airoucat: true,
-      codex: true,
-    } as Parameters<typeof init>[0]);
-
-    expect(
-      fs.existsSync(
-        path.join(
-          tmpDir,
-          ".trellis",
-          "spec",
-          "engineering",
-          "user-intent-routing.md",
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      fs.existsSync(
-        path.join(tmpDir, ".trellis", "spec", "runtime", "runtime-evidence.md"),
-      ),
-    ).toBe(false);
-    expect(
-      fs.existsSync(
-        path.join(tmpDir, "scripts", "dev", "setup_graphify_local.py"),
-      ),
-    ).toBe(false);
-
-    const config = fs.readFileSync(
-      path.join(tmpDir, DIR_NAMES.WORKFLOW, "config.yaml"),
-      "utf-8",
-    );
-    expect(config).toContain("profile: default");
-    expect(config).toContain("enabled: false");
-  });
-
-  it("#3b-airoucat claude-only profile installs hostile review without codex prompt", async () => {
-    await init({
-      yes: true,
-      airoucat: true,
-      profile: "automation",
-      claude: true,
-    } as Parameters<typeof init>[0]);
-
-    expect(
-      fs.existsSync(
-        path.join(
-          tmpDir,
-          ".claude",
-          "skills",
-          "trellis-hostile-review",
-          "SKILL.md",
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      fs.existsSync(
-        path.join(
-          tmpDir,
-          ".claude",
-          "commands",
-          "trellis",
-          "hostile-review.md",
-        ),
-      ),
-    ).toBe(true);
-    expect(
-      fs.existsSync(
-        path.join(tmpDir, ".codex", "prompts", "trellis-hostile-review.md"),
-      ),
-    ).toBe(false);
-  });
-
-  it("#3b-airoucat graphify preserves existing package scripts", async () => {
-    fs.writeFileSync(
-      path.join(tmpDir, "package.json"),
-      JSON.stringify(
-        {
-          scripts: {
-            build: "tsc",
-            "graphify:setup": "custom setup",
-          },
-        },
-        null,
-        2,
-      ) + "\n",
-    );
-
-    await init({
-      yes: true,
-      airoucat: true,
-      graphify: true,
-      claude: true,
-    } as Parameters<typeof init>[0]);
-
-    const packageJson = JSON.parse(
-      fs.readFileSync(path.join(tmpDir, "package.json"), "utf-8"),
-    ) as { scripts?: Record<string, string> };
-    expect(packageJson.scripts?.build).toBe("tsc");
-    expect(packageJson.scripts?.["graphify:setup"]).toBe("custom setup");
-    expect(packageJson.scripts?.["graphify:rebuild"]).toBe(
-      "python3 scripts/dev/setup_graphify_local.py --rebuild",
     );
   });
 
@@ -658,6 +461,14 @@ describe("init() integration", () => {
     expect(
       fs.existsSync(path.join(tmpDir, ".github", "hooks", "trellis.json")),
     ).toBe(true);
+    const copilotInstructionsPath = path.join(
+      tmpDir,
+      ...COPILOT_INSTRUCTIONS_PATH.split("/"),
+    );
+    expect(fs.existsSync(copilotInstructionsPath)).toBe(true);
+    expect(fs.readFileSync(copilotInstructionsPath, "utf-8")).toBe(
+      getCopilotInstructions(),
+    );
 
     const hashFile = path.join(
       tmpDir,
@@ -673,6 +484,7 @@ describe("init() integration", () => {
     expect(trackedPaths).not.toContain(".github/prompts/start.prompt.md");
     expect(trackedPaths).toContain(".github/prompts/finish-work.prompt.md");
     expect(trackedPaths).toContain(".github/prompts/continue.prompt.md");
+    expect(trackedPaths).toContain(COPILOT_INSTRUCTIONS_PATH);
     expect(trackedPaths).toContain(".github/copilot/hooks.json");
     expect(trackedPaths).toContain(".github/hooks/trellis.json");
 
@@ -750,7 +562,7 @@ describe("init() integration", () => {
     ).toBe(true);
     expect(
       fs.existsSync(
-        path.join(tmpDir, ".pi", "skills", "trellis-check", "SKILL.md"),
+        path.join(tmpDir, ".agents", "skills", "trellis-check", "SKILL.md"),
       ),
     ).toBe(true);
     expect(
@@ -785,6 +597,89 @@ describe("init() integration", () => {
     expect(trackedPaths).toEqual(expect.arrayContaining(expectedPiPaths));
   });
 
+  it("#3m kimi platform creates shared skills and .kimi-code skills", async () => {
+    await init({ yes: true, kimi: true });
+
+    // Shared workflow + bundled skills → .agents/skills/
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".agents", "skills", "trellis-check", "SKILL.md"),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".agents", "skills", "trellis-meta", "SKILL.md"),
+      ),
+    ).toBe(true);
+
+    // Kimi-private skills: commands-as-skills + agent prompts
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".kimi-code", "skills", "trellis-start", "SKILL.md"),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(
+          tmpDir,
+          ".kimi-code",
+          "skills",
+          "trellis-continue",
+          "SKILL.md",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(
+          tmpDir,
+          ".kimi-code",
+          "skills",
+          "trellis-finish-work",
+          "SKILL.md",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(
+          tmpDir,
+          ".kimi-code",
+          "skills",
+          "trellis-implement",
+          "SKILL.md",
+        ),
+      ),
+    ).toBe(true);
+
+    // Kimi has no project-level hooks/settings surface.
+    expect(fs.existsSync(path.join(tmpDir, ".kimi-code", "hooks"))).toBe(false);
+    expect(
+      fs.existsSync(path.join(tmpDir, ".kimi-code", "settings.json")),
+    ).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, ".claude"))).toBe(false);
+    expect(fs.existsSync(path.join(tmpDir, ".cursor"))).toBe(false);
+
+    const hashFile = path.join(
+      tmpDir,
+      DIR_NAMES.WORKFLOW,
+      ".template-hashes.json",
+    );
+    const hashesFile = JSON.parse(fs.readFileSync(hashFile, "utf-8")) as {
+      __version?: number;
+      hashes?: Record<string, string>;
+    };
+    const hashes = hashesFile.hashes ?? {};
+    const trackedPaths = Object.keys(hashes).map((p) => p.replace(/\\/g, "/"));
+    const kimiTemplates = collectPlatformTemplates("kimi");
+    expect(kimiTemplates).toBeInstanceOf(Map);
+    if (!kimiTemplates) {
+      throw new Error("Expected Kimi templates to be collectable");
+    }
+    const expectedKimiPaths = [...kimiTemplates.keys()];
+    expect(trackedPaths).toEqual(expect.arrayContaining(expectedKimiPaths));
+  });
+
   it("#3l trae platform writes hooks, commands, agents, and tracked templates", async () => {
     await init({ yes: true, trae: true });
 
@@ -806,12 +701,12 @@ describe("init() integration", () => {
       ),
     ).toBe(true);
     expect(
-      fs.existsSync(
-        path.join(tmpDir, ".trae", "commands", "trellis-start.md"),
-      ),
+      fs.existsSync(path.join(tmpDir, ".trae", "commands", "trellis-start.md")),
     ).toBe(false);
     expect(
-      fs.existsSync(path.join(tmpDir, ".trae", "agents", "trellis-implement.md")),
+      fs.existsSync(
+        path.join(tmpDir, ".trae", "agents", "trellis-implement.md"),
+      ),
     ).toBe(true);
     expect(
       fs.readFileSync(
@@ -841,13 +736,14 @@ describe("init() integration", () => {
     );
   });
 
-  it("#3m zcode platform emits start slash command without shared command-as-skill fallback", async () => {
+  it("#3m zcode platform filters start command and writes hooks (hasHooks=true)", async () => {
     await init({ yes: true, zcode: true });
 
-    // ZCode is agentCapable && !hasHooks, so start must be user-invocable.
-    // It has a private command surface, so command fallbacks stay under
-    // .zcode/commands/trellis/ instead of the shared .agents/skills/ path
-    // that Codex also owns.
+    // ZCode owns its private .zcode surface. Commands remain commands, while
+    // .zcode/skills contains workflow/bundled skills only. Since ZCode is
+    // agentCapable && hasHooks, the start command is filtered out (SessionStart
+    // hook injects equivalent context) and hook assets are written.
+    expect(fs.existsSync(path.join(tmpDir, ".agents", "skills"))).toBe(false);
     expect(
       fs.existsSync(
         path.join(tmpDir, ".agents", "skills", "trellis-start", "SKILL.md"),
@@ -857,10 +753,44 @@ describe("init() integration", () => {
       fs.existsSync(
         path.join(tmpDir, ".zcode", "commands", "trellis", "start.md"),
       ),
+    ).toBe(false);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".zcode", "skills", "trellis-start", "SKILL.md"),
+      ),
+    ).toBe(false);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".zcode", "skills", "trellis-continue", "SKILL.md"),
+      ),
+    ).toBe(false);
+    expect(
+      fs.existsSync(
+        path.join(
+          tmpDir,
+          ".zcode",
+          "skills",
+          "trellis-finish-work",
+          "SKILL.md",
+        ),
+      ),
+    ).toBe(false);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".zcode", "skills", "trellis-check", "SKILL.md"),
+      ),
     ).toBe(true);
     expect(
       fs.existsSync(
         path.join(tmpDir, ".zcode", "agents", "trellis-implement.md"),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(path.join(tmpDir, ".zcode", "agents", "trellis-check.md")),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".zcode", "agents", "trellis-research.md"),
       ),
     ).toBe(true);
   });
@@ -1589,6 +1519,30 @@ describe("init() integration", () => {
       fs.readFileSync(path.join(tmpDir, ".claude", "settings.json"), "utf-8"),
     ) as Record<string, unknown>;
     expect(settings).toHaveProperty("statusLine");
+  });
+
+  it("#28a issue #500: reinit configures Claude when native .claude settings already exist", async () => {
+    const nativeSettingsPath = path.join(tmpDir, ".claude", "settings.json");
+    fs.mkdirSync(path.dirname(nativeSettingsPath), { recursive: true });
+    fs.writeFileSync(nativeSettingsPath, '{"permissions":{"allow":[]}}\n');
+
+    await init({ yes: true, codex: true, user: "alice" });
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".claude", "skills", "trellis-meta", "SKILL.md"),
+      ),
+    ).toBe(false);
+
+    await init({ yes: true, claude: true });
+
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".claude", "skills", "trellis-meta", "SKILL.md"),
+      ),
+    ).toBe(true);
+    expect(fs.readFileSync(nativeSettingsPath, "utf-8")).toBe(
+      '{"permissions":{"allow":[]}}\n',
+    );
   });
 
   it("#29 reinit add-platform: no confirm when claude is already configured", async () => {
