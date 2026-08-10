@@ -33,13 +33,20 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Validate Airoucat overlay
+      - name: Normalize changed TypeScript
         run: |
-          pnpm --filter @mindfoldhq/trellis-core build
-          pnpm --filter @mindfoldhq/trellis exec vitest run test/commands/airoucat.integration.test.ts
-          pnpm --filter @mindfoldhq/trellis typecheck
+          pnpm --filter @mindfoldhq/trellis exec eslint --fix src/cli/index.ts src/commands/init.ts test/commands/airoucat.integration.test.ts
+          pnpm --filter @mindfoldhq/trellis exec prettier --write src/cli/index.ts src/commands/init.ts test/commands/airoucat.integration.test.ts
+
+      - name: Validate resolved tree
+        run: |
+          pnpm build
+          pnpm test
+          pnpm typecheck
 
       - name: Commit resolved sync
+        env:
+          HUSKY: "0"
         run: |
           rm .github/workflows/airoucat-sync-resolve.yml .github/airoucat-sync-resolve.py
           git config user.name "github-actions[bot]"
