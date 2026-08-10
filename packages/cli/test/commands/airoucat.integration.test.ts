@@ -26,7 +26,7 @@ import { execSync } from "node:child_process";
 import { init } from "../../src/commands/init.js";
 import { DIR_NAMES, PATHS } from "../../src/constants/paths.js";
 
-const noop = () => {};
+const noop = () => undefined;
 
 describe("Airoucat init overlay", () => {
   let tmpDir: string;
