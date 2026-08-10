@@ -5,7 +5,10 @@ import os
 import stat
 import subprocess
 import sys
+from collections.abc import Callable
+from importlib import import_module, invalidate_caches, util
 from pathlib import Path
+from typing import cast
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -14,17 +17,27 @@ OUT_DIR = REPO_ROOT / "graphify-out"
 
 
 def ensure_graphify() -> None:
-    try:
-        import graphify  # noqa: F401
+    if util.find_spec("graphify") is not None:
         return
-    except ImportError:
-        print("[graphify] installing graphifyy with the current Python")
-        subprocess.run(
-            [sys.executable, "-m", "pip", "install", "--user", "graphifyy"],
-            cwd=REPO_ROOT,
-            check=True,
-        )
-        import graphify  # noqa: F401
+
+    print("[graphify] installing graphifyy with the current Python")
+    subprocess.run(
+        [sys.executable, "-m", "pip", "install", "--user", "graphifyy"],
+        cwd=REPO_ROOT,
+        check=True,
+    )
+    invalidate_caches()
+    if util.find_spec("graphify") is None:
+        raise RuntimeError("graphifyy installed but the graphify module is unavailable")
+
+
+def load_rebuild_code() -> Callable[[Path], bool]:
+    ensure_graphify()
+    module = import_module("graphify.watch")
+    rebuild_code = getattr(module, "_rebuild_code", None)
+    if not callable(rebuild_code):
+        raise RuntimeError("graphify.watch._rebuild_code is unavailable")
+    return cast(Callable[[Path], bool], rebuild_code)
 
 
 def ensure_hook_permissions() -> None:
@@ -45,11 +58,10 @@ def configure_hooks_path() -> None:
 
 
 def rebuild_code_graph(reason: str) -> int:
-    ensure_graphify()
-    from graphify.watch import _rebuild_code
+    rebuild_code = load_rebuild_code()
 
     print(f"[graphify] rebuild requested: {reason}")
-    ok = _rebuild_code(REPO_ROOT)
+    ok = rebuild_code(REPO_ROOT)
     if not ok:
         print("[graphify] rebuild failed", file=sys.stderr)
         return 1
