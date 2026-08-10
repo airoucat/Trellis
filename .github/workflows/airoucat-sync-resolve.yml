@@ -1,0 +1,364 @@
+name: Resolve Airoucat upstream sync
+
+on:
+  push:
+    branches:
+      - sync/upstream-2026-08-10
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apply conflict resolution
+        shell: bash
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path: str, old: str, new: str, count: int = 1) -> None:
+              p = Path(path)
+              text = p.read_text()
+              actual = text.count(old)
+              if actual != count:
+                  raise SystemExit(f"{path}: expected {count} match(es), found {actual}: {old[:100]!r}")
+              p.write_text(text.replace(old, new, count))
+
+          init_path = "packages/cli/src/commands/init.ts"
+          cli_path = "packages/cli/src/cli/index.ts"
+          test_path = "packages/cli/test/commands/init.integration.test.ts"
+          readme_path = "README.md"
+
+          replace_exact(
+              init_path,
+              'import { createWorkflowStructure } from "../configurators/workflow.js";\n',
+              'import { createWorkflowStructure } from "../configurators/workflow.js";\n'
+              'import {\n'
+              '  configureAiroucat,\n'
+              '  resolveAiroucatProfile,\n'
+              '} from "../configurators/airoucat.js";\n',
+          )
+
+          replace_exact(
+              init_path,
+              '  omp?: boolean;\n  grok?: boolean;\n  kimi?: boolean;\n  snow?: boolean;\n  yes?: boolean;\n',
+              '  omp?: boolean;\n  grok?: boolean;\n  kimi?: boolean;\n  snow?: boolean;\n'
+              '  airoucat?: boolean;\n'
+              '  profile?: string;\n'
+              '  graphify?: boolean;\n'
+              '  ambient?: boolean;\n'
+              '  strictEvidence?: boolean;\n'
+              '  yes?: boolean;\n',
+          )
+
+          replace_exact(
+              init_path,
+              '  const cwd = process.cwd();\n'
+              '  const isFirstInit = !fs.existsSync(path.join(cwd, DIR_NAMES.WORKFLOW));\n'
+              '  // Captured here (before createWorkflowStructure + init_developer run) so\n',
+              '  const cwd = process.cwd();\n'
+              '  const isFirstInit = !fs.existsSync(path.join(cwd, DIR_NAMES.WORKFLOW));\n'
+              '  const airoucatEnabled = options.airoucat === true;\n'
+              '  const airoucatProfile = airoucatEnabled\n'
+              '    ? resolveAiroucatProfile(options.profile)\n'
+              '    : "default";\n'
+              '  // Captured here (before createWorkflowStructure + init_developer run) so\n',
+          )
+
+          replace_exact(
+              init_path,
+              '  let doAddPlatforms = explicitTools.length > 0;\n'
+              '  let doAddDeveloper = !!options.user;\n'
+              '  let platformsToAdd: string[] = explicitTools;\n\n'
+              '  // No explicit flags → show menu\n'
+              '  if (!doAddPlatforms && !doAddDeveloper) {\n',
+              '  let doAddPlatforms = explicitTools.length > 0;\n'
+              '  let doAddDeveloper = !!options.user;\n'
+              '  const doAiroucat = options.airoucat === true;\n'
+              '  let platformsToAdd: string[] = explicitTools;\n\n'
+              '  // No explicit action → show menu. Airoucat is itself a re-init action.\n'
+              '  if (!doAddPlatforms && !doAddDeveloper && !doAiroucat) {\n',
+          )
+
+          replace_exact(
+              init_path,
+              '  return true;\n}\n\n/**\n * Interactive opt-in for the Claude Code statusLine',
+              '''  if (doAiroucat) {
+    const configuredPlatformsAfter = getConfiguredPlatforms(cwd);
+    const airoucatWritten = startRecordingWrites(cwd);
+    try {
+      await configureAiroucat(cwd, {
+        profile: resolveAiroucatProfile(options.profile),
+        ambient: options.ambient !== false,
+        graphify: options.graphify === true,
+        strictEvidence: options.strictEvidence === true,
+        codex: configuredPlatformsAfter.has("codex"),
+        claude: configuredPlatformsAfter.has("claude-code"),
+      });
+    } finally {
+      stopRecordingWrites();
+    }
+    initializeHashes(cwd, { trackedPaths: airoucatWritten, merge: true });
+  }
+
+  return true;
+}
+
+/**
+ * Interactive opt-in for the Claude Code statusLine''',
+          )
+
+          replace_exact(
+              init_path,
+              '    // Create root files (skip if exists)\n    await createRootFiles(cwd);\n',
+              '''    // Create root files (skip if exists)
+    await createRootFiles(cwd);
+
+    if (airoucatEnabled) {
+      await configureAiroucat(cwd, {
+        profile: airoucatProfile,
+        ambient: options.ambient !== false,
+        graphify: options.graphify === true,
+        strictEvidence: options.strictEvidence === true,
+        codex: tools.includes("codex"),
+        claude: tools.includes("claude"),
+      });
+    }
+''',
+          )
+
+          replace_exact(
+              cli_path,
+              '  .option("--snow", "Include Snow CLI skills and commands")\n'
+              '  .option(\n    "--with-statusline",\n',
+              '  .option("--snow", "Include Snow CLI skills and commands")\n'
+              '  .option("--airoucat", "Apply the Airoucat workflow profile overlay")\n'
+              '  .option(\n'
+              '    "--profile <name>",\n'
+              '    "Airoucat profile to apply with --airoucat (default, mod, automation)",\n'
+              '  )\n'
+              '  .option("--graphify", "Install graphify scripts and local Git hooks")\n'
+              '  .option("--ambient", "Enable Airoucat Ambient Mode")\n'
+              '  .option("--strict-evidence", "Require strict evidence rules in Airoucat mode")\n'
+              '  .option(\n    "--with-statusline",\n',
+          )
+
+          airoucat_tests = r'''
+  it("#3b-airoucat creates mod profile specs, evidence workflow, hostile review, and graphify assets", async () => {
+    fs.writeFileSync(
+      path.join(tmpDir, "package.json"),
+      JSON.stringify({ scripts: { test: "vitest run" } }, null, 2) + "\n",
+    );
+
+    await init({
+      yes: true,
+      airoucat: true,
+      profile: "mod",
+      ambient: true,
+      graphify: true,
+      strictEvidence: true,
+      codex: true,
+      claude: true,
+    } as Parameters<typeof init>[0]);
+
+    const workflow = fs.readFileSync(
+      path.join(tmpDir, PATHS.WORKFLOW_GUIDE_FILE),
+      "utf-8",
+    );
+    expect(workflow).toContain("[workflow-state:needs_evidence]");
+    expect(workflow).toContain("Ambient Intent Router");
+    expect(workflow).toContain("Hostile Review");
+
+    const config = fs.readFileSync(
+      path.join(tmpDir, DIR_NAMES.WORKFLOW, "config.yaml"),
+      "utf-8",
+    );
+    expect(config).toContain("airoucat:");
+    expect(config).toContain("profile: mod");
+    expect(config).toContain("strict: true");
+    expect(config).toContain("enabled: true");
+
+    const requiredFiles = [
+      ".trellis/spec/engineering/user-intent-routing.md",
+      ".trellis/spec/engineering/evidence-rules.md",
+      ".trellis/spec/engineering/hostile-review.md",
+      ".trellis/spec/engineering/no-fake-closeout.md",
+      ".trellis/spec/engineering/graphify-rules.md",
+      ".trellis/spec/engineering/testing-gates.md",
+      ".trellis/spec/engineering/review-checklist.md",
+      ".trellis/spec/project/non-goals.md",
+      ".trellis/spec/runtime/runtime-evidence.md",
+      ".trellis/spec/runtime/compatibility-boundaries.md",
+      ".trellis/spec/runtime/no-legacy-authority.md",
+      ".trellis/spec/runtime/integration-test-policy.md",
+      ".agents/skills/trellis-hostile-review/SKILL.md",
+      ".codex/skills/trellis-hostile-review/SKILL.md",
+      ".claude/skills/trellis-hostile-review/SKILL.md",
+      ".claude/commands/trellis/hostile-review.md",
+      ".codex/prompts/trellis-hostile-review.md",
+      "scripts/dev/setup_graphify_local.py",
+      ".githooks/graphify-common.sh",
+      ".githooks/post-commit",
+      ".githooks/post-checkout",
+      ".githooks/post-merge",
+      ".githooks/post-rewrite",
+    ];
+    for (const relativePath of requiredFiles) {
+      expect(fs.existsSync(path.join(tmpDir, relativePath))).toBe(true);
+    }
+
+    const hashFile = JSON.parse(
+      fs.readFileSync(
+        path.join(tmpDir, DIR_NAMES.WORKFLOW, ".template-hashes.json"),
+        "utf-8",
+      ),
+    ) as { hashes?: Record<string, string> };
+    expect(
+      hashFile.hashes?.[".agents/skills/trellis-hostile-review/SKILL.md"],
+    ).toBeDefined();
+  });
+
+  it("#3b-airoucat rejects unsupported profiles", async () => {
+    await expect(
+      init({
+        yes: true,
+        airoucat: true,
+        profile: "unsupported",
+      } as Parameters<typeof init>[0]),
+    ).rejects.toThrow(/Unsupported Airoucat profile/);
+  });
+
+  it("#3b-airoucat default profile skips runtime-only specs and graphify assets", async () => {
+    await init({
+      yes: true,
+      airoucat: true,
+      codex: true,
+    } as Parameters<typeof init>[0]);
+
+    expect(
+      fs.existsSync(
+        path.join(
+          tmpDir,
+          ".trellis",
+          "spec",
+          "engineering",
+          "user-intent-routing.md",
+        ),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".trellis", "spec", "runtime", "runtime-evidence.md"),
+      ),
+    ).toBe(false);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, "scripts", "dev", "setup_graphify_local.py"),
+      ),
+    ).toBe(false);
+  });
+
+  it("#3b-airoucat applies cleanly to an already initialized project", async () => {
+    await init({ yes: true, codex: true } as Parameters<typeof init>[0]);
+
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".trellis", "spec", "engineering", "evidence-rules.md"),
+      ),
+    ).toBe(false);
+
+    await init({
+      yes: true,
+      airoucat: true,
+      profile: "automation",
+    } as Parameters<typeof init>[0]);
+
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".trellis", "spec", "engineering", "evidence-rules.md"),
+      ),
+    ).toBe(true);
+    expect(
+      fs.existsSync(
+        path.join(tmpDir, ".codex", "prompts", "trellis-hostile-review.md"),
+      ),
+    ).toBe(true);
+
+    const hashFile = JSON.parse(
+      fs.readFileSync(
+        path.join(tmpDir, DIR_NAMES.WORKFLOW, ".template-hashes.json"),
+        "utf-8",
+      ),
+    ) as { hashes?: Record<string, string> };
+    expect(
+      hashFile.hashes?.[".agents/skills/trellis-hostile-review/SKILL.md"],
+    ).toBeDefined();
+  });
+
+'''
+
+          replace_exact(
+              test_path,
+              '  it("#3c kiro platform creates .kiro/skills", async () => {\n',
+              airoucat_tests + '  it("#3c kiro platform creates .kiro/skills", async () => {\n',
+          )
+
+          airoucat_readme = r'''### Airoucat fork profile
+
+This fork keeps Airoucat behavior as an optional overlay on top of upstream Trellis.
+For the strict mod-development profile used by this fork:
+
+```bash
+trellis init -u your-name --airoucat --profile mod --codex --claude --graphify --strict-evidence
+```
+
+The overlay adds evidence rules, hostile-review guidance, optional Graphify hooks,
+and Airoucat-specific specs without replacing the upstream task lifecycle. It can
+also be applied later to an already initialized Trellis project with
+`trellis init --airoucat ...`.
+
+See `docs/airoucat/` for the fork-specific workflow and smoke-test notes.
+
+'''
+
+          replace_exact(
+              readme_path,
+              'See the [Quick Start](https://docs.trytrellis.app/start/install-and-first-task) and [Supported Platforms](https://docs.trytrellis.app/advanced/multi-platform) guides for setup details.\n\n## How to Use\n',
+              'See the [Quick Start](https://docs.trytrellis.app/start/install-and-first-task) and [Supported Platforms](https://docs.trytrellis.app/advanced/multi-platform) guides for setup details.\n\n' + airoucat_readme + '## How to Use\n',
+          )
+          PY
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Airoucat overlay
+        run: |
+          pnpm --filter @mindfoldhq/trellis-core build
+          pnpm --filter @mindfoldhq/trellis exec vitest run test/commands/init.integration.test.ts -t airoucat
+          pnpm --filter @mindfoldhq/trellis typecheck
+
+      - name: Commit resolved sync
+        shell: bash
+        run: |
+          rm .github/workflows/airoucat-sync-resolve.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add README.md packages/cli/src/cli/index.ts packages/cli/src/commands/init.ts packages/cli/test/commands/init.integration.test.ts .github/workflows/airoucat-sync-resolve.yml
+          git commit -m "sync: adapt Airoucat overlay to latest upstream"
+          git push
