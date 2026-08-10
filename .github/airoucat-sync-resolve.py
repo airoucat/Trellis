@@ -14,7 +14,6 @@ def replace_exact(path: str, old: str, new: str, count: int = 1) -> None:
 
 init_path = "packages/cli/src/commands/init.ts"
 cli_path = "packages/cli/src/cli/index.ts"
-test_path = "packages/cli/test/commands/init.integration.test.ts"
 readme_path = "README.md"
 
 replace_exact(
@@ -131,5 +130,4 @@ replace_exact(
     '  .option(\n    "--with-statusline",\n',
 )
 
-a iroucat_tests = r'''
-'''
+a iroucat_readme = None
