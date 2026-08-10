@@ -179,7 +179,11 @@ describe("Airoucat init overlay", () => {
   });
 
   it("can apply the overlay later to an already initialized project", async () => {
-    await init({ yes: true, codex: true } as Parameters<typeof init>[0]);
+    await init({
+      yes: true,
+      user: "test-user",
+      codex: true,
+    } as Parameters<typeof init>[0]);
 
     const evidenceSpec = path.join(
       tmpDir,
