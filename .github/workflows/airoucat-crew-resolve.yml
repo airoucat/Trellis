@@ -1,0 +1,79 @@
+name: Resolve Airoucat Pi crew
+
+on:
+  push:
+    branches:
+      - feature/pi-airoucat-crew
+
+permissions:
+  contents: write
+
+jobs:
+  resolve:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          submodules: recursive
+
+      - name: Apply narrow upstream integration patch
+        run: python3 .github/airoucat-crew-patch.py
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.32.1
+          run_install: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Normalize fork changes
+        run: |
+          pnpm --filter @mindfoldhq/trellis exec eslint --fix \
+            src/cli/index.ts \
+            src/commands/init.ts \
+            src/commands/update.ts \
+            src/configurators/airoucat.ts \
+            test/commands/airoucat-crew.integration.test.ts
+          pnpm --filter @mindfoldhq/trellis exec prettier --write \
+            src/cli/index.ts \
+            src/commands/init.ts \
+            src/commands/update.ts \
+            src/configurators/airoucat.ts \
+            test/commands/airoucat-crew.integration.test.ts
+
+      - name: Validate crew integration
+        run: |
+          pnpm --filter @mindfoldhq/trellis-core build
+          pnpm --filter @mindfoldhq/trellis exec vitest run \
+            test/commands/airoucat-crew.integration.test.ts \
+            test/commands/airoucat.integration.test.ts \
+            test/templates/pi.test.ts
+          pnpm typecheck
+          pnpm --filter @mindfoldhq/trellis lint:py
+          pnpm lint
+          pnpm build
+          pnpm test
+
+      - name: Commit resolved feature tree
+        env:
+          HUSKY: "0"
+        run: |
+          rm .github/workflows/airoucat-crew-resolve.yml .github/airoucat-crew-patch.py
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "feat: add Trellis-native Pi construction crew"
+          git push
