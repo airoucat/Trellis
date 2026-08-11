@@ -144,7 +144,13 @@ describe("Airoucat Pi crew", () => {
     ).toBe(true);
     expect(
       fs.existsSync(
-        path.join(tmpDir, ".trellis", "spec", "engineering", "crew-orchestration.md"),
+        path.join(
+          tmpDir,
+          ".trellis",
+          "spec",
+          "engineering",
+          "crew-orchestration.md",
+        ),
       ),
     ).toBe(true);
 
@@ -163,10 +169,9 @@ describe("Airoucat Pi crew", () => {
     } as Parameters<typeof init>[0]);
 
     const settingsPath = path.join(tmpDir, ".pi", "settings.json");
-    const existing = JSON.parse(fs.readFileSync(settingsPath, "utf-8")) as Record<
-      string,
-      unknown
-    >;
+    const existing = JSON.parse(
+      fs.readFileSync(settingsPath, "utf-8"),
+    ) as Record<string, unknown>;
     existing.theme = "light";
     existing.packages = [
       "npm:existing-project-package",
@@ -185,7 +190,9 @@ describe("Airoucat Pi crew", () => {
     expect(patched.theme).toBe("light");
     expect(patched.packages).toContain("npm:existing-project-package");
     expect(
-      patched.packages?.filter((entry) => JSON.stringify(entry).includes("@cortexkit/aft-pi")),
+      patched.packages?.filter((entry) =>
+        JSON.stringify(entry).includes("@cortexkit/aft-pi"),
+      ),
     ).toHaveLength(1);
     expect(patched.packages).toContain("npm:@cortexkit/pi-magic-context");
     expect(patched.compaction).toEqual({ reserveTokens: 4096, enabled: false });

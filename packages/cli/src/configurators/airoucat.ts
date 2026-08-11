@@ -99,11 +99,7 @@ function replaceOrAppendBlock(
   return `${content.trimEnd()}\n\n${block.trim()}\n`;
 }
 
-function getBlock(
-  content: string,
-  start: string,
-  end: string,
-): string | null {
+function getBlock(content: string, start: string, end: string): string | null {
   const startIndex = content.indexOf(start);
   if (startIndex < 0) return null;
   const endIndex = content.indexOf(end, startIndex);
@@ -284,12 +280,16 @@ function packageEntrySource(entry: unknown): string | null {
 }
 
 function hasCrewPackage(entries: unknown[], packageName: string): boolean {
-  return entries.some((entry) => packageEntrySource(entry)?.includes(packageName));
+  return entries.some((entry) =>
+    packageEntrySource(entry)?.includes(packageName),
+  );
 }
 
 export function patchAiroucatCrewPiSettingsContent(content: string): string {
   const settings = JSON.parse(content) as Record<string, unknown>;
-  const packages = Array.isArray(settings.packages) ? [...settings.packages] : [];
+  const packages = Array.isArray(settings.packages)
+    ? [...settings.packages]
+    : [];
 
   if (!hasCrewPackage(packages, "@cortexkit/pi-magic-context")) {
     packages.push(AIR_OUCAT_CREW_PACKAGES[0]);
@@ -525,7 +525,10 @@ export function applyAiroucatUpdateOverlay(
   }
 }
 
-function refreshPatchedManagedHashes(cwd: string, options: AiroucatConfiguratorOptions): void {
+function refreshPatchedManagedHashes(
+  cwd: string,
+  options: AiroucatConfiguratorOptions,
+): void {
   for (const relativePath of [
     `${DIR_NAMES.WORKFLOW}/config.yaml`,
     PATHS.WORKFLOW_GUIDE_FILE,
