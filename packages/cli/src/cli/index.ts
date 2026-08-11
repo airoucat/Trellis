@@ -101,6 +101,14 @@ program
   .option("--ambient", "Enable Airoucat Ambient Mode")
   .option("--strict-evidence", "Require strict evidence rules in Airoucat mode")
   .option(
+    "--crew",
+    "Install the Airoucat Pi construction crew (implies --airoucat and --pi)",
+  )
+  .option(
+    "--crew-model <provider/model>",
+    "Pi model used by bounded crew workers (default: deepseek/deepseek-v4-flash)",
+  )
+  .option(
     "--with-statusline",
     "Install the Trellis statusLine for Claude Code (off by default)",
   )

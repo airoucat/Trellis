@@ -56,6 +56,21 @@ export const graphifySetupScriptTemplate = readTemplate(
   "graphify/scripts/dev/setup_graphify_local.py",
 );
 
+export const crewWorkerAgentTemplate = readTemplate(
+  "crew/agents/trellis-worker.md",
+);
+export const crewSkillTemplate = readTemplate(
+  "crew/skills/trellis-crew/SKILL.md",
+);
+export const crewPromptTemplate = readTemplate("crew/prompts/trellis-crew.md");
+export const crewSpecTemplate = readTemplate(
+  "crew/spec/engineering/crew-orchestration.md",
+);
+export const crewMagicContextConfigTemplate = readTemplate(
+  "crew/cortexkit/magic-context.jsonc",
+);
+export const crewAftConfigTemplate = readTemplate("crew/cortexkit/aft.jsonc");
+
 export function getAiroucatSpecTemplates(): Map<string, string> {
   return readDirectoryTemplates("spec");
 }

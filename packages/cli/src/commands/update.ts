@@ -61,6 +61,7 @@ import {
 } from "../configurators/index.js";
 import { replacePythonCommandLiterals } from "../configurators/shared.js";
 import { preserveCodexAgentModelKeys } from "../configurators/codex.js";
+import { applyAiroucatUpdateOverlay } from "../configurators/airoucat.js";
 import { ensureGitattributes } from "../configurators/workflow.js";
 import { pruneOrphanManifestKeys } from "../utils/manifest-prune.js";
 import {
@@ -922,6 +923,11 @@ async function collectTemplateFiles(
   }
 
   preserveExistingClaudeStatusLine(cwd, files);
+
+  // Fork-owned overlays are applied after current upstream templates are
+  // collected so `trellis update` refreshes both layers without erasing
+  // Airoucat/crew-managed project configuration.
+  applyAiroucatUpdateOverlay(cwd, files);
 
   for (const [filePath, content] of await collectRegistrySpecTemplates(cwd)) {
     files.set(filePath, content);

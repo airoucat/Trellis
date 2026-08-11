@@ -1390,6 +1390,10 @@ function runPi(
     const childEnv = {
       ...process.env,
       TRELLIS_SUBAGENT_CHILD: "1",
+      // Trellis already injects a bounded task snapshot into child workers.
+      // Keep Magic Context in the long-lived foreman session only; its Pi
+      // extension recognizes this guard and no-ops in the ephemeral child.
+      MAGIC_CONTEXT_PI_SUBAGENT: "1",
       ...(key ? { TRELLIS_CONTEXT_ID: key } : {}),
     };
     const cli = spawn(inv.command, [...inv.args, ...buildPiArgs(cfg)], {

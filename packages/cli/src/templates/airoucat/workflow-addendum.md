@@ -23,6 +23,9 @@ evidence.
   hostile review if work is already in progress.
 - "go with that", "do it" -> execute only when implement.md exists or the scope is
   otherwise unambiguous.
+- "use the crew", "施工队", "parallelize the implementation" -> when crew mode is
+  installed and the Trellis implementation plan is approved, use `trellis-crew`.
+  The crew is an execution layer; it does not create another task state.
 - "review this", "hostile review" -> run check plus hostile review.
 - "finish this", "can we close it" -> require evidence, graphify refresh when
   code changed, and final check before archive.
@@ -48,6 +51,15 @@ when safe, or ask one focused question.
 No evidence.md means no done claim. If verification cannot be completed, record
 the item under Not Verified with reason and risk. For runtime-heavy profiles,
 tests alone do not prove runtime behavior.
+
+### Crew Authority
+
+When Airoucat crew mode is enabled, Trellis remains the canonical owner of task
+scope, lifecycle, acceptance and evidence. The main session is the foreman;
+workers implement bounded packages; `trellis-check` reviews the integrated diff.
+Magic Context is recall only and AFT is perception/editing only. Neither may
+silently override Trellis artifacts. Stop crew execution when complexity budget,
+write-set isolation, or Stop-Loss gates fail.
 
 ### Hostile Review
 

@@ -8,6 +8,7 @@ import inquirer from "inquirer";
 import { createWorkflowStructure } from "../configurators/workflow.js";
 import {
   configureAiroucat,
+  resolveAiroucatCrewModel,
   resolveAiroucatProfile,
 } from "../configurators/airoucat.js";
 import {
@@ -988,6 +989,9 @@ async function handleReinit(
         strictEvidence: options.strictEvidence === true,
         codex: configuredPlatformsAfter.has("codex"),
         claude: configuredPlatformsAfter.has("claude-code"),
+        pi: configuredPlatformsAfter.has("pi"),
+        crew: options.crew === true,
+        crewModel: resolveAiroucatCrewModel(options.crewModel),
       });
     } finally {
       stopRecordingWrites();
@@ -1053,6 +1057,8 @@ interface InitOptions {
   graphify?: boolean;
   ambient?: boolean;
   strictEvidence?: boolean;
+  crew?: boolean;
+  crewModel?: string;
   yes?: boolean;
   user?: string;
   force?: boolean;
@@ -1142,6 +1148,13 @@ export async function init(options: InitOptions): Promise<void> {
   if (options.windsurf) {
     options.devin = true;
     delete options.windsurf;
+  }
+
+  // Airoucat crew is a Pi-backed execution profile. Keep it turnkey on
+  // both fresh init and re-init: one flag installs the overlay and Pi.
+  if (options.crew) {
+    options.airoucat = true;
+    options.pi = true;
   }
 
   const cwd = process.cwd();
@@ -2000,6 +2013,9 @@ export async function init(options: InitOptions): Promise<void> {
         strictEvidence: options.strictEvidence === true,
         codex: tools.includes("codex"),
         claude: tools.includes("claude"),
+        pi: tools.includes("pi"),
+        crew: options.crew === true,
+        crewModel: resolveAiroucatCrewModel(options.crewModel),
       });
     }
   } finally {

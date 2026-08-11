@@ -1,0 +1,13 @@
+{
+  "$schema": "https://raw.githubusercontent.com/cortexkit/magic-context/master/assets/magic-context.schema.json",
+  "enabled": true,
+
+  // Long-term recall is advisory. Trellis task artifacts remain canonical.
+  // Reuse the high-throughput crew model for background history compression.
+  "historian": {
+    "model": "{{CREW_MODEL}}"
+  }
+
+  // Dreamer and sidekick are intentionally omitted. Their periodic/autonomous
+  // maintenance stays off unless the project explicitly opts in later.
+}
